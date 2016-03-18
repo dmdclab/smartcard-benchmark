@@ -1,0 +1,10 @@
+mode_211
+enable_trace
+establish_context
+card_connect
+select -AID a0000001510000
+open_sc -security 3 -keyind 0 -scp 15 -keyver 0 -mac_key xxxxxxxxxxxxxxxxxxxxxxxxxx -enc_key xxxxxxxxxxxxxxxxxxxxxxxxxx -kek_key xxxxxxxxxxxxxxxxxxxxxxxxxx  -keyDerivation none 
+delete -AID A00000014780
+install -file priKeyGen/priKeyGen.cap  -priv 2
+card_disconnect
+release_context

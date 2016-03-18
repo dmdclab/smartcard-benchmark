@@ -1,0 +1,235 @@
+<?xml version="1.0"?>
+<project name="Asymmetric Key Generation" default="all" basedir=".">
+    <!-- the directory structure under the base directory -->
+    <property name="projroot" value="./"/>
+    
+    <!-- environment properties -->
+    <property name="projroot" value="."/>
+    <property name="sourceroot" value="${projroot}/src"/>
+    <property name="classroot" value="${projroot}/classes"/>   
+    <property name="buildroot" value="${projroot}/build"/>
+    <property name="gp_home" value="/usr/local/smartcard/gp"/>
+    <property name="gpshell_home" value="${gp_home}/GPShell"/>
+    <property name="jcardkit_home" value="/usr/local/smartcard/javacard/java_card_kit-2_2_1"/>
+    <property name="jcardkit_exports" value="${jcardkit_home}/api_export_files"/>
+    <property name="jcardkit_libs" value="${jcardkit_home}/lib"/>
+
+    <!-- Applet definition properties -->
+    <property name="package_name" value="mil.osd.dmdc.is.ctl"/>
+    <property name="package_path" value="mil/osd/dmdc/is/ctl"/>
+    <property name="package_aid_bytes" value="0xA0:0x00:0x00:0x01:0x47:0x80"/>
+    <property name="package_aid_str" value="A00000014780"/>
+    <property name="applet_name" value="priKeyGen"/>
+    <property name="applet_aid_bytes" value="0xA0:0x00:0x00:0x01:0x47:0x80:0x02"/>
+    <property name="applet_aid_str" value="A0000001478002"/>
+    <property name="applet_maj" value="1"/>
+    <property name="applet_min" value="0"/>
+    <property name="install_gp_mode" value="mode_211"/>
+    <property name="final_cap_name" value="${applet_name}.cap"/>
+    <property name="build_cap_name" value="ctl.cap"/>
+    <property name="applet_class" value="KeyGen"/>
+    
+    
+    <!-- the directories where the Java Card(TM) export are located could go -->
+    <!-- into a properties file-->
+    <!-- Definitions for tasks for Java Card tools -->
+    <taskdef name="apdutool" classname="com.sun.javacard.ant.tasks.APDUToolTask"/>
+    <taskdef name="capgen" classname="com.sun.javacard.ant.tasks.CapgenTask"/>
+    <taskdef name="maskgen" classname="com.sun.javacard.ant.tasks.MaskgenTask"/>
+    <taskdef name="deploycap" classname="com.sun.javacard.ant.tasks.DeployCapTask"/>
+    <taskdef name="exp2text" classname="com.sun.javacard.ant.tasks.Exp2TextTask"/>
+    <taskdef name="convert" classname="com.sun.javacard.ant.tasks.ConverterTask"/>
+    <taskdef name="verifyexport" classname="com.sun.javacard.ant.tasks.VerifyExpTask"/>
+    <taskdef name="verifycap" classname="com.sun.javacard.ant.tasks.VerifyCapTask"/>
+    <taskdef name="verifyrevision" classname="com.sun.javacard.ant.tasks.VerifyRevTask"/>
+    <taskdef name="scriptgen" classname="com.sun.javacard.ant.tasks.ScriptgenTask"/>
+    <typedef name="appletnameaid" classname="com.sun.javacard.ant.types.AppletNameAID"/>
+    <typedef name="jcainputfile" classname="com.sun.javacard.ant.types.JCAInputFile"/>
+    <typedef name="exportfiles" classname="org.apache.tools.ant.types.FileSet"/>
+    
+    <property name="build_cap_name" value="applet.cap"/>
+    
+    
+    <!-- set the classpath at minimum to the Java Card API but also for -->
+    <!-- all other APIs needed in the project-->
+    <path id="classpath" description="Sets the classpath to Java Card API and tools">
+        <pathelement path="${jcardkit_home}/lib/api.jar"/>
+        <pathelement path="${jcardkit_home}/lib/converter.jar"/>
+        <pathelement path="${jcardkit_home}/lib/offcardverifier.jar"/>
+        <pathelement path="${jcardkit_home}/lib/scriptgen.jar"/>
+        <pathelement path="${jcardkit_home}/lib/apdutool.jar"/>
+        <pathelement path="${jcardkit_home}/lib/apduio.jar"/>
+        <pathelement path="."/>
+    </path>
+    <!-- set the export path to the Java Card export files -->
+    <path id="export" description="set the export file path">
+        <pathelement path="${jcardkit_exports}"/>
+        <pathelement path="./classes"/>
+    </path>
+    <!-- compile section -->
+    <target name="compile_sources" description="Build classes">
+        <!-- Make destination directory -->
+        <mkdir dir="${classroot}"/>
+        <mkdir dir="${buildroot}"/>
+        <!-- Compile the java code from ${src} to ${classes} -->
+        <javac debug="yes" optimize="no" target="1.2" srcdir="${sourceroot}/${package_path}"
+               destdir="${classroot}">
+            <classpath refid="classpath"/>
+        </javac>
+    </target>
+    <!-- Convert Applet  -->
+    <target name="convert_applet" depends="compile_sources" description="Build cap file for the ${applet_name} package">
+        <convert cap="true" packagename="${package_name}"
+                 packageaid="${package_aid_bytes}" majorminorversion="${applet_maj}.${applet_min}" classdir="${classroot}"
+                 outputdirectory="${buildroot}">
+            <AppletNameAID appletname="${applet_class}"
+                           aid="${applet_aid_bytes}"/>
+            <exportpath refid="export"/>
+            <classpath refid="classpath"/>
+        </convert>
+        <copy file="${buildroot}/${package_path}/javacard/${build_cap_name}" tofile="${buildroot}/${final_cap_name}"/>
+        <copy file="${buildroot}/${package_path}/javacard/${build_cap_name}" tofile="${gpshell_home}/${applet_name}/${final_cap_name}"/>
+    </target>
+    <!-- Verify CAP file for JavaPurse -->
+    <target name="verify_applet" depends="convert_applet">
+        <verifycap capfile="${buildroot}/${package_path}/javacard/${build_cap_name}">
+            <exportfiles dir="${jcardkit_exports}">
+                <include name="javacard/**/*.exp"/>
+                <include name="javacardx/**/*.exp"/>
+                <include name="**/lang.exp"/>
+            </exportfiles>
+            <classpath refid="classpath"/>
+        </verifycap>
+    </target>
+    
+    <target name="build_applet_install_script" depends="convert_applet">
+        
+        <echo file="${buildroot}/${gp_script_name}" append="false">${install_gp_mode}${line.separator}</echo>
+        <echo file="${buildroot}/${gp_script_name}" append="true">enable_trace${line.separator}</echo>
+        <echo file="${buildroot}/${gp_script_name}" append="true">establish_context${line.separator}</echo>
+        <echo file="${buildroot}/${gp_script_name}" append="true">card_connect${line.separator}</echo>
+        <echo file="${buildroot}/${gp_script_name}" append="true">select -AID ${cm_aid}${line.separator}</echo>
+        <echo file="${buildroot}/${gp_script_name}" append="true">open_sc -security 3 -keyind ${cm_keyind} -scp 15 -keyver ${cm_keyver} ${cm_keyset}  -keyDerivation ${cm_diversification} ${line.separator}</echo>
+        <echo file="${buildroot}/${gp_script_name}" append="true">delete -AID ${package_aid_str}${line.separator}</echo>
+        <echo file="${buildroot}/${gp_script_name}" append="true">install -file ${applet_name}/${applet_name}.cap  -priv 2${line.separator}</echo>
+        <echo file="${buildroot}/${gp_script_name}" append="true">card_disconnect${line.separator}</echo>
+        <echo file="${buildroot}/${gp_script_name}" append="true">release_context${line.separator}</echo>
+        
+         <copy file="${buildroot}/${gp_script_name}" todir="${gpshell_home}/${applet_name}"/>
+         <exec executable="GPShell" dir="${gpshell_home}">
+            <arg value="${applet_name}/${gp_script_name}"/>
+         </exec>
+
+    </target>
+
+    <!-- Deploy SampleLibrary before deploying JavaPurse because -->
+    <!-- JavaPurse depends on SampleLibrary -->
+    
+    <!-- Deploy applet to smart card -->
+    <target name="deploy_GTO" depends="convert_applet">
+        <antcall target="build_applet_install_script">
+            <param name="cm_aid" value="a0000001510000"/>
+            <param name="cm_keyind" value="0"/>
+            <param name="cm_keyver" value="0"/>
+            <param name="cm_keyset" value="-mac_key xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx -enc_key xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx -kek_key xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"/>
+            <param name="cm_diversification" value="none"/>
+            <param name="gp_script_name" value="${applet_name}_ins_GTO.txt"/>
+        </antcall>
+    </target>
+    <target name="deploy_OCS" depends="convert_applet">
+        <antcall target="build_applet_install_script">
+            <param name="cm_aid" value="a0000001510000"/>
+            <param name="cm_keyind" value="0"/>
+            <param name="cm_keyver" value="0"/>
+            <param name="cm_keyset" value="-mac_key xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx -enc_key xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx -kek_key xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"/>
+            <param name="cm_diversification" value="none"/>
+            <param name="gp_script_name" value="${applet_name}_ins_OCS.txt"/>
+        </antcall>
+    </target>
+    <target name="deploy_GD" depends="convert_applet">
+        <antcall target="build_applet_install_script">
+            <param name="cm_aid" value="A000000003000000"/>
+            <param name="cm_keyind" value="0"/>
+            <param name="cm_keyver" value="0"/>
+            <param name="cm_keyset" value="-mac_key xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx -enc_key xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx -kek_key xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"/>
+            <param name="cm_diversification" value="none"/>
+            <param name="gp_script_name" value="${applet_name}_ins_GD.txt"/>
+        </antcall>
+    </target>
+    <target name="deploy__GTO_nofips" depends="convert_applet">
+        <antcall target="build_applet_install_script">
+            <param name="cm_aid" value="a000000003000000"/>
+            <param name="cm_keyind" value="0"/>
+            <param name="cm_keyver" value="0"/>
+            <param name="cm_keyset" value="-key xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"/>
+            <param name="cm_diversification" value="visa2"/>
+            <param name="gp_script_name" value="${applet_name}_ins_GTO_nofips.txt"/>
+        </antcall>
+    </target>
+    <target name="deploy_P5CD144" depends="convert_applet">
+        <antcall target="build_applet_install_script">
+            <param name="cm_aid" value="A000000003000000"/>
+            <param name="cm_keyind" value="0"/>
+            <param name="cm_keyver" value="0"/>
+            <param name="cm_keyset" value="-key xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"/>
+            <param name="cm_diversification" value="none"/>
+            <param name="gp_script_name" value="${applet_name}_ins_P5CD144.txt"/>
+        </antcall>
+    </target>
+    <!-- Clean output directories -->
+    <target name="clean">
+        <delete dir="${classroot}"/>
+        <delete dir="${buildroot}"/>
+    </target>
+    <!-- Clean, compile, convert, verify, deploy cap files and run test script -->
+    <target name="all" depends="clean"/>
+</project>
+
+<!-- extra 
+            <param name="cm_aid" value="a0000001510000"/>
+        <echo file="${buildroot}/${gp_script_name}" append="true">install -file ${applet_name}/${applet_name}.cap -nvCodeLimit 100 -priv 2${line.separator}</echo>
+
+ -keyDerivation ${cm_diversification}
+ <echo file="${buildroot}/${gp_script_name}" append="true">install -file ${applet_name}/${applet_name}.cap -nvCodeLimit 400 -priv 2${line.separator}</echo>
+
+
+            <exportfiles file="${gplib_home}/GP_export_211/org/globalplatform/javacard/globalplatform.exp"/>
+            <exportfiles dir="${gplib.home}">
+                <include name="**/globalplatform.exp"/>
+            </exportfiles>
+    <target name="verify_applet" depends="convert_applet">
+        <verifycap capfile="${buildroot}/com/redhat/ckey/applet/javacard/applet.cap">
+            <exportfiles dir="${jcardkit_exports}">
+                <include name="**/javacard/framework/javacard/framework.exp"/>
+                <include name="**/lang.exp"/>
+            </exportfiles>
+            <exportfiles dir="${gp_exports}">
+                <include name="org/globalplatform/javacard/globalplatform.exp"/>
+            </exportfiles>
+            <classpath refid="classpath"/>
+        </verifycap>
+    </target>
+    
+    
+                    <include name="**/javacard/framework/javacard/framework.exp"/>
+                <include name="**/javacard/security/javacard/security.exp"/>
+                <include name="**/javacard/security/javacard/security.exp"/>
+    <target name="deploy_ck_applet" depends="convert_applet">
+        <mkdir dir="${ckapplet.eeprom}"/>
+        <deploycap ineefile="${ckapplet.eeprom}/EEFile" outeefile="${ckapplet.eeprom}/EEFile"
+                   crefexe="${jcardkit_home}/bin/cref.exe"
+                   capfile="${classroot}/com/redhat/ckey/applet/CardEdge.cap">
+            <classpath refid="classpath"/>
+        </deploycap>
+    </target>
+    + Now that JavaPurse is deployed we can run our test script
+    <target name="run_test_script" depends="deploy_ck_applet">
+        <apdutool scriptfile="${ckapplet.scripts}/testckapplet.scr" ineefile="${ckapplet.eeprom}/EEFile"
+                  outeefile="${ckapplet.eeprom}/EEFile" checkdownloadfailure="false"
+                  crefexe="${jcardkit_home}/bin/cref.exe">
+            <classpath refid="classpath"/>
+        </apdutool>
+    </target>
+            <arg value="${buildroot}/${gp_script_name}"/>
+
+-->
